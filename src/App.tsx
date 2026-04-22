@@ -1,16 +1,23 @@
+import { useState } from 'react'
+import type { ViewType } from './types/todo'
 import { useTodos } from './hooks/useTodos'
 import TodoInput from './components/TodoInput'
 import TodoList from './components/TodoList'
 import TodoFilter from './components/TodoFilter'
 import SearchBar from './components/SearchBar'
+import ViewToggle from './components/ViewToggle'
+import CalendarView from './components/CalendarView'
 
 export default function App() {
+  const [view, setView] = useState<ViewType>('list')
+
   const {
+    todos,
     filteredTodos,
-    filter,
-    setFilter,
-    search,
-    setSearch,
+    filter, setFilter,
+    search, setSearch,
+    categoryFilter, setCategoryFilter,
+    categories,
     stats,
     addTodo,
     toggleTodo,
@@ -18,13 +25,15 @@ export default function App() {
     editTodo,
     clearCompleted,
     toggleAll,
+    addLog,
+    deleteLog,
   } = useTodos()
 
   const progressPercent = stats.total === 0 ? 0 : Math.round((stats.completed / stats.total) * 100)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 py-10 px-4">
-      <div className="max-w-lg mx-auto space-y-5">
+      <div className="max-w-2xl mx-auto space-y-5">
 
         {/* Header */}
         <header className="text-center space-y-1">
@@ -45,58 +54,67 @@ export default function App() {
               </div>
               <span className="text-gray-400 font-medium">{progressPercent}%</span>
             </div>
-            {/* Progress bar */}
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500 ease-out"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            {stats.total > 0 && (
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={toggleAll}
-                  className="text-xs text-gray-400 hover:text-indigo-500 transition-colors"
-                >
-                  {stats.active === 0 ? '모두 미완료로 변경' : '모두 완료로 표시'}
-                </button>
-                {progressPercent === 100 && (
-                  <span className="text-xs text-green-500 font-medium animate-pulse">
-                    🎉 모든 할 일 완료!
-                  </span>
-                )}
-              </div>
-            )}
+            <div className="flex items-center justify-between">
+              <button onClick={toggleAll} className="text-xs text-gray-400 hover:text-indigo-500 transition-colors">
+                {stats.active === 0 ? '모두 미완료로 변경' : '모두 완료로 표시'}
+              </button>
+              {progressPercent === 100 && (
+                <span className="text-xs text-green-500 font-medium animate-pulse">🎉 모든 할 일 완료!</span>
+              )}
+            </div>
           </div>
         )}
 
         {/* Input */}
-        <TodoInput onAdd={addTodo} />
+        <TodoInput categories={categories} onAdd={addTodo} />
 
-        {/* Search */}
-        <SearchBar value={search} onChange={setSearch} />
+        {/* View toggle + Search */}
+        <div className="flex gap-2 items-center">
+          <ViewToggle view={view} onChange={setView} />
+          <div className="flex-1">
+            <SearchBar value={search} onChange={setSearch} />
+          </div>
+        </div>
 
-        {/* Filter */}
-        <TodoFilter
-          filter={filter}
-          onFilterChange={setFilter}
-          activeCount={stats.active}
-          completedCount={stats.completed}
-          onClearCompleted={clearCompleted}
-        />
-
-        {/* List */}
-        <main>
-          <TodoList
-            todos={filteredTodos}
-            search={search}
-            onToggle={toggleTodo}
-            onDelete={deleteTodo}
-            onEdit={editTodo}
+        {/* List view controls */}
+        {view === 'list' && (
+          <TodoFilter
+            filter={filter}
+            onFilterChange={setFilter}
+            activeCount={stats.active}
+            completedCount={stats.completed}
+            onClearCompleted={clearCompleted}
+            categories={categories}
+            categoryFilter={categoryFilter}
+            onCategoryFilter={setCategoryFilter}
           />
+        )}
+
+        {/* Main content */}
+        <main>
+          {view === 'list' ? (
+            <TodoList
+              todos={filteredTodos}
+              categories={categories}
+              search={search}
+              onToggle={toggleTodo}
+              onDelete={deleteTodo}
+              onEdit={editTodo}
+              onAddLog={addLog}
+              onDeleteLog={deleteLog}
+            />
+          ) : (
+            <CalendarView todos={todos} />
+          )}
         </main>
 
-        {/* Footer hint */}
+        {/* Footer */}
         <footer className="text-center text-xs text-gray-300 pt-2">
           더블클릭으로 편집 · Enter로 저장 · Esc로 취소
         </footer>
