@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import type { Todo, Priority, FilterType } from '../types/todo'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import type { Todo, TodoLog, Priority, FilterType } from '../types/todo'
 import { loadTodos, saveTodos } from '../utils/storage'
 
 function generateId(): string {
@@ -10,84 +10,123 @@ export function useTodos() {
   const [todos, setTodos] = useState<Todo[]>(() => loadTodos())
   const [filter, setFilter] = useState<FilterType>('all')
   const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
 
   useEffect(() => {
     saveTodos(todos)
   }, [todos])
 
-  const addTodo = useCallback((text: string, priority: Priority, dueDate: string | null) => {
+  const addTodo = useCallback((
+    text: string,
+    priority: Priority,
+    startDate: string | null,
+    endDate: string | null,
+    category: string | null,
+  ) => {
     const trimmed = text.trim()
     if (!trimmed) return
-    setTodos(prev => [
-      {
-        id: generateId(),
-        text: trimmed,
-        completed: false,
-        priority,
-        dueDate,
-        createdAt: new Date().toISOString(),
-      },
-      ...prev,
-    ])
+    setTodos(prev => [{
+      id: generateId(),
+      text: trimmed,
+      completed: false,
+      priority,
+      startDate,
+      endDate,
+      category: category?.trim() || null,
+      logs: [],
+      createdAt: new Date().toISOString(),
+    }, ...prev])
   }, [])
 
   const toggleTodo = useCallback((id: string) => {
-    setTodos(prev =>
-      prev.map(todo =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
-      )
-    )
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t))
   }, [])
 
   const deleteTodo = useCallback((id: string) => {
-    setTodos(prev => prev.filter(todo => todo.id !== id))
+    setTodos(prev => prev.filter(t => t.id !== id))
   }, [])
 
-  const editTodo = useCallback((id: string, text: string, priority: Priority, dueDate: string | null) => {
+  const editTodo = useCallback((
+    id: string,
+    text: string,
+    priority: Priority,
+    startDate: string | null,
+    endDate: string | null,
+    category: string | null,
+  ) => {
     const trimmed = text.trim()
     if (!trimmed) return
-    setTodos(prev =>
-      prev.map(todo =>
-        todo.id === id ? { ...todo, text: trimmed, priority, dueDate } : todo
-      )
-    )
+    setTodos(prev => prev.map(t =>
+      t.id === id ? { ...t, text: trimmed, priority, startDate, endDate, category: category?.trim() || null } : t
+    ))
   }, [])
 
   const clearCompleted = useCallback(() => {
-    setTodos(prev => prev.filter(todo => !todo.completed))
+    setTodos(prev => prev.filter(t => !t.completed))
   }, [])
 
   const toggleAll = useCallback(() => {
-    const allCompleted = todos.every(todo => todo.completed)
-    setTodos(prev => prev.map(todo => ({ ...todo, completed: !allCompleted })))
-  }, [todos])
+    setTodos(prev => {
+      const allDone = prev.every(t => t.completed)
+      return prev.map(t => ({ ...t, completed: !allDone }))
+    })
+  }, [])
 
-  const filteredTodos = todos.filter(todo => {
-    const matchesFilter =
+  const addLog = useCallback((todoId: string, date: string, content: string) => {
+    const trimmed = content.trim()
+    if (!trimmed) return
+    const log: TodoLog = {
+      id: generateId(),
+      date,
+      content: trimmed,
+      createdAt: new Date().toISOString(),
+    }
+    setTodos(prev => prev.map(t =>
+      t.id === todoId ? { ...t, logs: [log, ...t.logs] } : t
+    ))
+  }, [])
+
+  const deleteLog = useCallback((todoId: string, logId: string) => {
+    setTodos(prev => prev.map(t =>
+      t.id === todoId ? { ...t, logs: t.logs.filter(l => l.id !== logId) } : t
+    ))
+  }, [])
+
+  const categories = useMemo(() =>
+    Array.from(new Set(todos.map(t => t.category).filter(Boolean) as string[])).sort(),
+    [todos]
+  )
+
+  const filteredTodos = useMemo(() => todos.filter(todo => {
+    const matchesStatus =
       filter === 'all' ||
       (filter === 'active' && !todo.completed) ||
       (filter === 'completed' && todo.completed)
 
     const matchesSearch =
-      search.trim() === '' ||
+      !search.trim() ||
       todo.text.toLowerCase().includes(search.trim().toLowerCase())
 
-    return matchesFilter && matchesSearch
-  })
+    const matchesCategory =
+      !categoryFilter ||
+      todo.category === categoryFilter
 
-  const stats = {
+    return matchesStatus && matchesSearch && matchesCategory
+  }), [todos, filter, search, categoryFilter])
+
+  const stats = useMemo(() => ({
     total: todos.length,
     active: todos.filter(t => !t.completed).length,
     completed: todos.filter(t => t.completed).length,
-  }
+  }), [todos])
 
   return {
     todos,
     filteredTodos,
-    filter,
-    setFilter,
-    search,
-    setSearch,
+    filter, setFilter,
+    search, setSearch,
+    categoryFilter, setCategoryFilter,
+    categories,
     stats,
     addTodo,
     toggleTodo,
@@ -95,5 +134,7 @@ export function useTodos() {
     editTodo,
     clearCompleted,
     toggleAll,
+    addLog,
+    deleteLog,
   }
 }
