@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ViewType } from './types/todo'
 import { useTodos } from './hooks/useTodos'
+import { useTheme } from './hooks/useTheme'
 import TodoInput from './components/TodoInput'
 import TodoList from './components/TodoList'
 import TodoFilter from './components/TodoFilter'
@@ -8,9 +9,11 @@ import SearchBar from './components/SearchBar'
 import ViewToggle from './components/ViewToggle'
 import CalendarView from './components/CalendarView'
 import SortControl from './components/SortControl'
+import ThemePicker from './components/ThemePicker'
 
 export default function App() {
   const [view, setView] = useState<ViewType>('list')
+  const { themeId, theme, applyTheme } = useTheme()
 
   const {
     todos,
@@ -34,15 +37,18 @@ export default function App() {
   const progressPercent = stats.total === 0 ? 0 : Math.round((stats.completed / stats.total) * 100)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 py-10 px-4">
+    <div className="min-h-screen py-10 px-4 transition-all duration-500" style={{ background: theme.css }}>
       <div className="max-w-2xl mx-auto space-y-5">
 
         {/* Header */}
-        <header className="text-center space-y-1">
+        <header className="relative text-center space-y-1">
           <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
             할 일 목록 <span className="text-indigo-600">✓</span>
           </h1>
           <p className="text-gray-500 text-sm">오늘도 하나씩 해결해 봐요</p>
+          <div className="absolute right-0 top-0">
+            <ThemePicker themeId={themeId} onSelect={applyTheme} />
+          </div>
         </header>
 
         {/* Stats bar */}
