@@ -9,9 +9,11 @@ function migrateTodo(raw: any): Todo {
     text: raw.text ?? '',
     completed: raw.completed ?? false,
     priority: raw.priority ?? 'medium',
-    // migrate old single dueDate to both startDate and endDate
+    importance: typeof raw.importance === 'number' ? raw.importance : 0,
     startDate: raw.startDate ?? raw.dueDate ?? null,
+    startTime: raw.startTime ?? null,
     endDate: raw.endDate ?? raw.dueDate ?? null,
+    endTime: raw.endTime ?? null,
     category: raw.category ?? null,
     logs: Array.isArray(raw.logs) ? raw.logs : [],
     createdAt: raw.createdAt ?? new Date().toISOString(),

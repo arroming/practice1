@@ -1,9 +1,19 @@
 import { useState, useRef } from 'react'
 import type { Priority } from '../types/todo'
+import StarRating from './StarRating'
 
 interface TodoInputProps {
   categories: string[]
-  onAdd: (text: string, priority: Priority, startDate: string | null, endDate: string | null, category: string | null) => void
+  onAdd: (
+    text: string,
+    priority: Priority,
+    importance: number,
+    startDate: string | null,
+    startTime: string | null,
+    endDate: string | null,
+    endTime: string | null,
+    category: string | null,
+  ) => void
 }
 
 const priorityConfig: Record<Priority, { label: string; cls: string }> = {
@@ -12,29 +22,90 @@ const priorityConfig: Record<Priority, { label: string; cls: string }> = {
   high:   { label: '높음', cls: 'text-red-600 bg-red-50 border-red-200' },
 }
 
-const today = () => new Date().toISOString().split('T')[0]
+const HOURS   = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
+const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55']
+
+function todayStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function nowTimeTo5Min(): string {
+  const d = new Date()
+  const h = d.getHours()
+  const rawMin = d.getMinutes()
+  const m = Math.round(rawMin / 5) * 5
+  if (m >= 60) return `${String((h + 1) % 24).padStart(2, '0')}:00`
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [h, m] = value.split(':')
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        value={h}
+        onChange={e => onChange(`${e.target.value}:${m}`)}
+        className="text-xs border border-gray-200 rounded px-1 py-0.5 bg-white outline-none focus:ring-1 focus:ring-indigo-300"
+      >
+        {HOURS.map(hh => <option key={hh} value={hh}>{hh}</option>)}
+      </select>
+      <span className="text-gray-400 text-xs font-bold">:</span>
+      <select
+        value={m}
+        onChange={e => onChange(`${h}:${e.target.value}`)}
+        className="text-xs border border-gray-200 rounded px-1 py-0.5 bg-white outline-none focus:ring-1 focus:ring-indigo-300"
+      >
+        {MINUTES.map(mm => <option key={mm} value={mm}>{mm}</option>)}
+      </select>
+    </div>
+  )
+}
 
 export default function TodoInput({ categories, onAdd }: TodoInputProps) {
   const [text, setText] = useState('')
   const [priority, setPriority] = useState<Priority>('medium')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const [importance, setImportance] = useState(0)
+  const [startDate, setStartDate] = useState(todayStr())
+  const [endDate, setEndDate] = useState(todayStr())
+  const [includeStartTime, setIncludeStartTime] = useState(false)
+  const [includeEndTime, setIncludeEndTime] = useState(false)
+  const [startTime, setStartTime] = useState(nowTimeTo5Min())
+  const [endTime, setEndTime] = useState(nowTimeTo5Min())
   const [category, setCategory] = useState('')
   const [newCategory, setNewCategory] = useState('')
   const [showOptions, setShowOptions] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const resetFields = () => {
+    setStartDate(todayStr())
+    setEndDate(todayStr())
+    setIncludeStartTime(false)
+    setIncludeEndTime(false)
+    setStartTime(nowTimeTo5Min())
+    setEndTime(nowTimeTo5Min())
+    setPriority('medium')
+    setImportance(0)
+    setCategory('')
+    setNewCategory('')
+  }
+
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
     if (!text.trim()) return
     const cat = newCategory.trim() || category || null
-    onAdd(text, priority, startDate || null, endDate || null, cat)
+    onAdd(
+      text,
+      priority,
+      importance,
+      startDate || null,
+      includeStartTime ? startTime : null,
+      endDate || null,
+      includeEndTime ? endTime : null,
+      cat,
+    )
     setText('')
-    setStartDate('')
-    setEndDate('')
-    setCategory('')
-    setNewCategory('')
-    setPriority('medium')
+    resetFields()
     setShowOptions(false)
     inputRef.current?.focus()
   }
@@ -44,14 +115,24 @@ export default function TodoInput({ categories, onAdd }: TodoInputProps) {
     if (e.key === 'Escape') { setText(''); setShowOptions(false) }
   }
 
-  const handleStartChange = (val: string) => {
+  const handleStartDateChange = (val: string) => {
     setStartDate(val)
     if (endDate && val > endDate) setEndDate(val)
   }
 
-  const handleEndChange = (val: string) => {
+  const handleEndDateChange = (val: string) => {
     setEndDate(val)
     if (startDate && val < startDate) setStartDate(val)
+  }
+
+  const handleToggleStartTime = (on: boolean) => {
+    setIncludeStartTime(on)
+    if (on) setStartTime(nowTimeTo5Min())
+  }
+
+  const handleToggleEndTime = (on: boolean) => {
+    setIncludeEndTime(on)
+    if (on) setEndTime(nowTimeTo5Min())
   }
 
   return (
@@ -84,6 +165,7 @@ export default function TodoInput({ categories, onAdd }: TodoInputProps) {
 
       {showOptions && (
         <div className="border-t border-gray-100 px-4 py-3 space-y-3 bg-gray-50">
+
           {/* Priority */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-gray-500 font-medium w-14">우선순위</span>
@@ -102,27 +184,63 @@ export default function TodoInput({ categories, onAdd }: TodoInputProps) {
             </div>
           </div>
 
+          {/* Importance */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 font-medium w-14">중요도</span>
+            <StarRating value={importance} onChange={setImportance} />
+            {importance > 0 && (
+              <button onClick={() => setImportance(0)} className="text-xs text-gray-400 hover:text-red-400 transition-colors">초기화</button>
+            )}
+          </div>
+
           {/* Date range */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-500 font-medium w-14">기간</span>
-            <div className="flex items-center gap-2">
+          <div className="space-y-1.5">
+            <span className="text-xs text-gray-500 font-medium">기간</span>
+            {/* Start date */}
+            <div className="flex items-center gap-2 flex-wrap pl-0">
+              <span className="text-xs text-gray-400 w-6">시작</span>
               <input
                 type="date"
                 value={startDate}
-                onChange={e => handleStartChange(e.target.value)}
-                min={today()}
+                onChange={e => handleStartDateChange(e.target.value)}
                 className="text-xs text-gray-700 border border-gray-200 rounded-md px-2 py-1 bg-white outline-none focus:ring-2 focus:ring-indigo-300"
               />
-              <span className="text-gray-400 text-xs">~</span>
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeStartTime}
+                  onChange={e => handleToggleStartTime(e.target.checked)}
+                  className="rounded border-gray-300 text-indigo-500 focus:ring-indigo-300"
+                />
+                <span className="text-xs text-gray-500">시간 포함</span>
+              </label>
+              {includeStartTime && <TimeSelect value={startTime} onChange={setStartTime} />}
+              {startDate && (
+                <button onClick={() => { setStartDate(''); setIncludeStartTime(false) }} className="text-gray-300 hover:text-red-400 text-xs transition-colors">✕</button>
+              )}
+            </div>
+            {/* End date */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-400 w-6">종료</span>
               <input
                 type="date"
                 value={endDate}
-                onChange={e => handleEndChange(e.target.value)}
-                min={startDate || today()}
+                min={startDate || undefined}
+                onChange={e => handleEndDateChange(e.target.value)}
                 className="text-xs text-gray-700 border border-gray-200 rounded-md px-2 py-1 bg-white outline-none focus:ring-2 focus:ring-indigo-300"
               />
-              {(startDate || endDate) && (
-                <button onClick={() => { setStartDate(''); setEndDate('') }} className="text-xs text-gray-400 hover:text-red-400">✕</button>
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeEndTime}
+                  onChange={e => handleToggleEndTime(e.target.checked)}
+                  className="rounded border-gray-300 text-indigo-500 focus:ring-indigo-300"
+                />
+                <span className="text-xs text-gray-500">시간 포함</span>
+              </label>
+              {includeEndTime && <TimeSelect value={endTime} onChange={setEndTime} />}
+              {endDate && (
+                <button onClick={() => { setEndDate(''); setIncludeEndTime(false) }} className="text-gray-300 hover:text-red-400 text-xs transition-colors">✕</button>
               )}
             </div>
           </div>
@@ -138,9 +256,7 @@ export default function TodoInput({ categories, onAdd }: TodoInputProps) {
                       key={cat}
                       onClick={() => { setCategory(cat === category ? '' : cat); setNewCategory('') }}
                       className={`px-2 py-0.5 rounded-full text-xs border transition-colors ${
-                        category === cat
-                          ? 'bg-indigo-100 text-indigo-700 border-indigo-300'
-                          : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300'
+                        category === cat ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300'
                       }`}
                     >
                       {cat}

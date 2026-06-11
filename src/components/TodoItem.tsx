@@ -1,13 +1,19 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Todo, Priority } from '../types/todo'
 import TodoLogs from './TodoLogs'
+import StarRating from './StarRating'
 
 interface TodoItemProps {
   todo: Todo
   categories: string[]
   onToggle: (id: string) => void
   onDelete: (id: string) => void
-  onEdit: (id: string, text: string, priority: Priority, startDate: string | null, endDate: string | null, category: string | null) => void
+  onEdit: (
+    id: string, text: string, priority: Priority, importance: number,
+    startDate: string | null, startTime: string | null,
+    endDate: string | null, endTime: string | null,
+    category: string | null,
+  ) => void
   onAddLog: (todoId: string, date: string, content: string) => void
   onDeleteLog: (todoId: string, logId: string) => void
 }
@@ -19,21 +25,35 @@ const priorityLabel: Record<Priority, string> = {
   low: '낮음', medium: '보통', high: '높음',
 }
 
+const HOURS   = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
+const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55']
+
 function toDateStr(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function formatDateRange(start: string | null, end: string | null): string {
-  const fmt = (s: string) => s.slice(5).replace('-', '/')
-  if (start && end && start !== end) return `${fmt(start)} ~ ${fmt(end)}`
-  if (start && end && start === end) return fmt(start)
-  if (start) return `${fmt(start)} ~`
-  if (end) return `~ ${fmt(end)}`
+function formatDateRange(
+  startDate: string | null, startTime: string | null,
+  endDate: string | null, endTime: string | null,
+): string {
+  const fmt = (d: string, t: string | null) => {
+    const dm = d.slice(5).replace('-', '/')
+    return t ? `${dm} ${t}` : dm
+  }
+  if (startDate && endDate) {
+    if (startDate === endDate) {
+      if (startTime && endTime && startTime !== endTime) return `${fmt(startDate, startTime)} ~ ${fmt(endDate, endTime)}`
+      return fmt(startDate, startTime)
+    }
+    return `${fmt(startDate, startTime)} ~ ${fmt(endDate, endTime)}`
+  }
+  if (startDate) return `${fmt(startDate, startTime)} ~`
+  if (endDate)   return `~ ${fmt(endDate, endTime)}`
   return ''
 }
 
-function getDueDateStatus(start: string | null, end: string | null): 'overdue' | 'today' | 'soon' | 'normal' | null {
-  const ref = end || start
+function getDueDateStatus(startDate: string | null, endDate: string | null) {
+  const ref = endDate || startDate
   if (!ref) return null
   const today = toDateStr(new Date())
   if (ref < today) return 'overdue'
@@ -59,13 +79,35 @@ export function getCategoryColor(cat: string, allCategories: string[]) {
   return CATEGORY_COLORS[idx % CATEGORY_COLORS.length]
 }
 
+function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [h, m] = value.split(':')
+  return (
+    <div className="flex items-center gap-1">
+      <select value={h} onChange={e => onChange(`${e.target.value}:${m}`)}
+        className="text-xs border border-gray-200 rounded px-1 py-0.5 bg-white outline-none focus:ring-1 focus:ring-indigo-300">
+        {HOURS.map(hh => <option key={hh} value={hh}>{hh}</option>)}
+      </select>
+      <span className="text-gray-400 text-xs font-bold">:</span>
+      <select value={m} onChange={e => onChange(`${h}:${e.target.value}`)}
+        className="text-xs border border-gray-200 rounded px-1 py-0.5 bg-white outline-none focus:ring-1 focus:ring-indigo-300">
+        {MINUTES.map(mm => <option key={mm} value={mm}>{mm}</option>)}
+      </select>
+    </div>
+  )
+}
+
 export default function TodoItem({ todo, categories, onToggle, onDelete, onEdit, onAddLog, onDeleteLog }: TodoItemProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
   const [editText, setEditText] = useState(todo.text)
   const [editPriority, setEditPriority] = useState<Priority>(todo.priority)
-  const [editStart, setEditStart] = useState(todo.startDate ?? '')
-  const [editEnd, setEditEnd] = useState(todo.endDate ?? '')
+  const [editImportance, setEditImportance] = useState(todo.importance)
+  const [editStartDate, setEditStartDate] = useState(todo.startDate ?? '')
+  const [editStartTime, setEditStartTime] = useState(todo.startTime ?? '09:00')
+  const [includeStartTime, setIncludeStartTime] = useState(!!todo.startTime)
+  const [editEndDate, setEditEndDate] = useState(todo.endDate ?? '')
+  const [editEndTime, setEditEndTime] = useState(todo.endTime ?? '18:00')
+  const [includeEndTime, setIncludeEndTime] = useState(!!todo.endTime)
   const [editCategory, setEditCategory] = useState(todo.category ?? '')
   const [newCategory, setNewCategory] = useState('')
   const [removing, setRemoving] = useState(false)
@@ -83,8 +125,13 @@ export default function TodoItem({ todo, categories, onToggle, onDelete, onEdit,
   const startEdit = () => {
     setEditText(todo.text)
     setEditPriority(todo.priority)
-    setEditStart(todo.startDate ?? '')
-    setEditEnd(todo.endDate ?? '')
+    setEditImportance(todo.importance)
+    setEditStartDate(todo.startDate ?? '')
+    setEditStartTime(todo.startTime ?? '09:00')
+    setIncludeStartTime(!!todo.startTime)
+    setEditEndDate(todo.endDate ?? '')
+    setEditEndTime(todo.endTime ?? '18:00')
+    setIncludeEndTime(!!todo.endTime)
     setEditCategory(todo.category ?? '')
     setNewCategory('')
     setIsEditing(true)
@@ -93,7 +140,12 @@ export default function TodoItem({ todo, categories, onToggle, onDelete, onEdit,
   const saveEdit = () => {
     if (!editText.trim()) return
     const cat = newCategory.trim() || editCategory || null
-    onEdit(todo.id, editText, editPriority, editStart || null, editEnd || null, cat)
+    onEdit(
+      todo.id, editText, editPriority, editImportance,
+      editStartDate || null, includeStartTime ? editStartTime : null,
+      editEndDate || null, includeEndTime ? editEndTime : null,
+      cat,
+    )
     setIsEditing(false)
   }
 
@@ -103,11 +155,11 @@ export default function TodoItem({ todo, categories, onToggle, onDelete, onEdit,
   }
 
   const handleEditStartChange = (val: string) => {
-    setEditStart(val)
-    if (editEnd && val > editEnd) setEditEnd(val)
+    setEditStartDate(val)
+    if (editEndDate && val > editEndDate) setEditEndDate(val)
   }
 
-  const dateRange = formatDateRange(todo.startDate, todo.endDate)
+  const dateRange = formatDateRange(todo.startDate, todo.startTime, todo.endDate, todo.endTime)
   const dateStatus = !todo.completed ? getDueDateStatus(todo.startDate, todo.endDate) : null
   const catColor = todo.category ? getCategoryColor(todo.category, categories) : ''
 
@@ -149,8 +201,8 @@ export default function TodoItem({ todo, categories, onToggle, onDelete, onEdit,
                 onKeyDown={handleEditKey}
                 className="w-full text-sm text-gray-800 border border-indigo-300 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-indigo-200"
               />
-              <div className="flex flex-wrap gap-2 items-center">
-                {/* Priority */}
+              {/* Priority + Importance */}
+              <div className="flex flex-wrap items-center gap-3">
                 <div className="flex gap-1">
                   {(['low', 'medium', 'high'] as Priority[]).map(p => (
                     <button key={p} onClick={() => setEditPriority(p)}
@@ -161,14 +213,32 @@ export default function TodoItem({ todo, categories, onToggle, onDelete, onEdit,
                       }`}>{priorityLabel[p]}</button>
                   ))}
                 </div>
-                {/* Date range */}
-                <div className="flex items-center gap-1">
-                  <input type="date" value={editStart} onChange={e => handleEditStartChange(e.target.value)}
+                <StarRating value={editImportance} onChange={setEditImportance} size="sm" />
+              </div>
+              {/* Date range */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-400 w-6">시작</span>
+                  <input type="date" value={editStartDate} onChange={e => handleEditStartChange(e.target.value)}
                     className="text-xs border border-gray-200 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-indigo-300" />
-                  <span className="text-gray-400 text-xs">~</span>
-                  <input type="date" value={editEnd} min={editStart}
-                    onChange={e => setEditEnd(e.target.value)}
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" checked={includeStartTime} onChange={e => setIncludeStartTime(e.target.checked)}
+                      className="rounded border-gray-300 text-indigo-500" />
+                    <span className="text-xs text-gray-500">시간</span>
+                  </label>
+                  {includeStartTime && <TimeSelect value={editStartTime} onChange={setEditStartTime} />}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-400 w-6">종료</span>
+                  <input type="date" value={editEndDate} min={editStartDate || undefined}
+                    onChange={e => setEditEndDate(e.target.value)}
                     className="text-xs border border-gray-200 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-indigo-300" />
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" checked={includeEndTime} onChange={e => setIncludeEndTime(e.target.checked)}
+                      className="rounded border-gray-300 text-indigo-500" />
+                    <span className="text-xs text-gray-500">시간</span>
+                  </label>
+                  {includeEndTime && <TimeSelect value={editEndTime} onChange={setEditEndTime} />}
                 </div>
               </div>
               {/* Category edit */}
@@ -180,13 +250,10 @@ export default function TodoItem({ todo, categories, onToggle, onDelete, onEdit,
                       editCategory === cat ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300'
                     }`}>{cat}</button>
                 ))}
-                <input
-                  type="text"
-                  value={newCategory}
+                <input type="text" value={newCategory}
                   onChange={e => { setNewCategory(e.target.value); setEditCategory('') }}
                   placeholder="새 카테고리"
-                  className="text-xs border border-gray-200 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-indigo-300 w-24"
-                />
+                  className="text-xs border border-gray-200 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-indigo-300 w-24" />
               </div>
               <div className="flex gap-1">
                 <button onClick={saveEdit} className="px-2.5 py-1 bg-indigo-600 text-white text-xs rounded-md hover:bg-indigo-700 transition-colors">저장</button>
@@ -206,6 +273,9 @@ export default function TodoItem({ todo, categories, onToggle, onDelete, onEdit,
                   <span className={`w-1.5 h-1.5 rounded-full ${priorityDot[todo.priority]}`} />
                   <span className="text-xs text-gray-400">{priorityLabel[todo.priority]}</span>
                 </span>
+                {todo.importance > 0 && (
+                  <StarRating value={todo.importance} readonly size="sm" />
+                )}
                 {dateRange && (
                   <span className={`text-xs ${todo.completed ? 'text-gray-400' : dateStatusClass}`}>
                     {dateRange}
@@ -227,12 +297,7 @@ export default function TodoItem({ todo, categories, onToggle, onDelete, onEdit,
 
           {/* Logs panel */}
           {showLogs && !isEditing && (
-            <TodoLogs
-              todoId={todo.id}
-              logs={todo.logs}
-              onAdd={onAddLog}
-              onDelete={onDeleteLog}
-            />
+            <TodoLogs todoId={todo.id} logs={todo.logs} onAdd={onAddLog} onDelete={onDeleteLog} />
           )}
         </div>
 
@@ -245,7 +310,7 @@ export default function TodoItem({ todo, categories, onToggle, onDelete, onEdit,
               title="메모/진행 내역"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </button>
             <button onClick={startEdit} className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="편집">
