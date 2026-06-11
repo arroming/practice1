@@ -7,6 +7,7 @@ import TodoFilter from './components/TodoFilter'
 import SearchBar from './components/SearchBar'
 import ViewToggle from './components/ViewToggle'
 import CalendarView from './components/CalendarView'
+import SortControl from './components/SortControl'
 
 export default function App() {
   const [view, setView] = useState<ViewType>('list')
@@ -18,6 +19,7 @@ export default function App() {
     search, setSearch,
     categoryFilter, setCategoryFilter,
     categories,
+    sortOption, setSortOption,
     stats,
     addTodo,
     toggleTodo,
@@ -84,16 +86,23 @@ export default function App() {
 
         {/* List view controls */}
         {view === 'list' && (
-          <TodoFilter
-            filter={filter}
-            onFilterChange={setFilter}
-            activeCount={stats.active}
-            completedCount={stats.completed}
-            onClearCompleted={clearCompleted}
-            categories={categories}
-            categoryFilter={categoryFilter}
-            onCategoryFilter={setCategoryFilter}
-          />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <TodoFilter
+                filter={filter}
+                onFilterChange={setFilter}
+                activeCount={stats.active}
+                completedCount={stats.completed}
+                onClearCompleted={clearCompleted}
+                categories={categories}
+                categoryFilter={categoryFilter}
+                onCategoryFilter={setCategoryFilter}
+              />
+            </div>
+            <div className="flex justify-end">
+              <SortControl sort={sortOption} onChange={setSortOption} />
+            </div>
+          </div>
         )}
 
         {/* Main content */}

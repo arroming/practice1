@@ -7,7 +7,12 @@ interface TodoListProps {
   search: string
   onToggle: (id: string) => void
   onDelete: (id: string) => void
-  onEdit: (id: string, text: string, priority: Priority, startDate: string | null, endDate: string | null, category: string | null) => void
+  onEdit: (
+    id: string, text: string, priority: Priority, importance: number,
+    startDate: string | null, startTime: string | null,
+    endDate: string | null, endTime: string | null,
+    category: string | null,
+  ) => void
   onAddLog: (todoId: string, date: string, content: string) => void
   onDeleteLog: (todoId: string, logId: string) => void
 }
